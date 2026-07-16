@@ -179,6 +179,17 @@ sample_cb (dc_sample_type_t type, const dc_sample_value_t *value, void *userdata
 	case DC_SAMPLE_GASMIX:
 		fprintf (sampledata->ostream, "   <gasmix>%u</gasmix>\n", value->gasmix);
 		break;
+	case DC_SAMPLE_LOCATION:
+		fprintf (sampledata->ostream,
+			"   <location>\n"
+			"      <latitude>%.6f<latitude>\n"
+			"      <longitude>%.6f</longitude>\n"
+			"      <altitude>%.3f<altitude>\n"
+			"   </location>\n",
+			value->location.latitude,
+			value->location.longitude,
+			value->location.altitude);
+		break;
 	default:
 		break;
 	}
