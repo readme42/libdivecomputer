@@ -288,18 +288,12 @@ shearwater_petrel_device_foreach (dc_device_t *abstract, dc_dive_callback_t call
 			count++;
 		}
 
-		// Update the progress state. Deleted records are never
-		// downloaded, so they must not count towards the maximum.
+		// Update the progress state.
 		current += 1;
-		maximum -= RECORD_COUNT - count;
+		maximum -= RECORD_COUNT - count - deleted;
 
-		// Append all walked records to the main buffer, including the
-		// deleted ones. The walk advances past deleted records without
-		// counting them, so appending only a count-sized prefix would
-		// push any valid record behind a deleted one past the appended
-		// bytes, and its dive would silently never be downloaded. The
-		// dive download loop skips the deleted records.
-		if (!dc_buffer_append (manifests, data, offset)) {
+		// Append the manifest records to the main buffer.
+		if (!dc_buffer_append (manifests, data, count * RECORD_SIZE)) {
 			ERROR (abstract->context, "Insufficient buffer space available.");
 			dc_buffer_free (buffer);
 			dc_buffer_free (manifests);
@@ -320,17 +314,11 @@ shearwater_petrel_device_foreach (dc_device_t *abstract, dc_dive_callback_t call
 	unsigned char *data = dc_buffer_get_data (manifests);
 	unsigned int size = dc_buffer_get_size (manifests);
 
-	// The manifest records are ordered newest to oldest. Walk them in
-	// reverse, so the dives are delivered oldest to newest. The download
-	// stops at the first failure, so a partial download always leaves a
-	// contiguous prefix of the oldest dives, and the newest delivered dive
-	// remains a correct fingerprint to resume from on the next attempt.
-	unsigned int nrecords = size / RECORD_SIZE;
-	for (unsigned int i = nrecords; i > 0; --i) {
-		unsigned int offset = (i - 1) * RECORD_SIZE;
-
+	unsigned int offset = 0;
+	while (offset < size) {
 		// skip deleted dives
 		if (array_uint16_be(data + offset) == 0x5A23) {
+			offset += RECORD_SIZE;
 			continue;
 		}
 		// Get the address of the dive.
@@ -354,6 +342,8 @@ shearwater_petrel_device_foreach (dc_device_t *abstract, dc_dive_callback_t call
 		unsigned int len = dc_buffer_get_size (buffer);
 		if (callback && !callback (buf, len, buf + 12, sizeof (device->fingerprint), userdata))
 			break;
+
+		offset += RECORD_SIZE;
 	}
 
 	// Update and emit a progress event.
